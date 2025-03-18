@@ -135,9 +135,9 @@ export function useSimulation(containerRef: React.RefObject<HTMLDivElement>): [S
     const color2 = '#42c3f7';
     const color3 = '#fdca40';
     
-    const trailColor1 = 'rgba(255, 77, 90, 0.2)';
-    const trailColor2 = 'rgba(66, 195, 247, 0.2)';
-    const trailColor3 = 'rgba(253, 202, 64, 0.2)';
+    const trailColor1 = 'rgba(255, 77, 90, 0.5)'; // Vermelho mais vivo
+    const trailColor2 = 'rgba(66, 195, 247, 0.5)'; // Azul mais vivo
+    const trailColor3 = 'rgba(253, 202, 64, 0.5)'; // Amarelo mais vivo
     
     // Create new bodies
     const newBodies = physicsRef.current.initBodies([

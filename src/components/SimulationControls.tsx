@@ -89,36 +89,37 @@ const SimulationControls: React.FC<SimulationControlsProps> = ({
             onValueChange={handleSpeedChange}
           />
         </div>
-        
-        <div className="flex justify-between gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onReset}
-            className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300"
-          >
-            <RotateCcw className="h-4 w-4 mr-1" />
-            Reset
-          </Button>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onRandomize}
-            className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300"
-          >
-            Aleatório
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onTogglePause}
-            className="w-10 p-0 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300"
-          >
-            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </Button>
-        </div>
+          <div className="flex justify-between gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onReset}
+              className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
+            >
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Reset
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onTogglePause}              
+              className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
+            >
+              {isPaused ? (
+                <>
+                  <Play className="h-4 w-4 mr-1" />
+                  Iniciar
+                </>
+              ) : (
+                <>
+                  <Pause className="h-4 w-4 mr-1" />
+                  Pausar
+                </>
+              )}
+            </Button>
+          </div>
       </div>
       
       <div className="mt-6 pt-4 border-t border-gray-800">
