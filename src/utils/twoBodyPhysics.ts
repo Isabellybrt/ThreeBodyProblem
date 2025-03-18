@@ -1,315 +1,210 @@
+import { useRef, useEffect } from 'react';
 
-import Matter from 'matter-js';
+export const G = 1;
 
-// Gravitational constant - scaled for our simulation
-const G: number = 0.3;
-
-// Maximum number of trail points to store
-const MAX_TRAIL_POINTS: number = 200;
-
-// Maximum velocity to prevent bodies from moving too fast
-const MAX_VELOCITY: number = 10;
-
-export interface Body {
-  id: number;
-  body: Matter.Body;
-  mass: number;
+export interface CelestialBody {
+  id: string;
+  position: { x: number; y: number };
+  radius: number;
   color: string;
-  trailColor: string;
+  mass: number;
+  velocity: { x: number; y: number };
   trail: { x: number; y: number }[];
 }
 
-export interface SimulationOptions {
-  width: number;
-  height: number;
-  gravitationalConstant?: number;
+export interface TwoBodySimulationState {
+  sun: CelestialBody;
+  planet: CelestialBody;
+  isPaused: boolean;
+  timeScale: number;
+  G: number; 
 }
 
-export interface BodyParams {
-  mass: number;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  radius?: number;
-  color: string;
-  trailColor: string;
-}
+export function useTwoBodyPhysics(
+  containerRef: React.RefObject<HTMLDivElement>,
+  orbitRadius: number,
+  sunMass: number,
+  planetMass: number,
+  gravity: number
+) {
+  const stateRef = useRef<TwoBodySimulationState>({
+    sun: {
+      id: 'sun',
+      position: { x: 0, y: 0 },
+      radius: 60,
+      color: '#FDB813',
+      mass: 1000,
+      velocity: { x: 0, y: 0 },
+      trail: []
+    },
+    planet: {
+      id: 'planet',
+      position: { x: 0, y: 0 },
+      radius: 25,
+      color: '#3498db',
+      mass: 10,
+      velocity: { x: 0, y: 0 },
+      trail: []
+    },
+    isPaused: true,
+    timeScale: 1,
+    G: 1 
+  });
 
-export class TwoBodyPhysics {
-  private engine: Matter.Engine;
-  private world: Matter.World;
-  private bodies: Body[] = [];
-  private timeScale: number = 1;
-  private width: number;
-  private height: number;
-  private G: number;
-  private paused: boolean = false;
-  private runner: Matter.Runner;
+  const rafRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
 
-  constructor(options: SimulationOptions) {
-    this.width = options.width;
-    this.height = options.height;
-    this.G = options.gravitationalConstant || G;
-
-    // Create the physics engine
-    this.engine = Matter.Engine.create({
-      // Disable gravity since we'll implement our own
-      gravity: { x: 0, y: 0, scale: 0 }
-    });
-
-    this.world = this.engine.world;
-
-    // Create a runner to handle the physics updates
-    this.runner = Matter.Runner.create({
-      isFixed: false,
-      delta: 16.666
-    });
-
-    // Before update event to apply custom gravity
-    Matter.Events.on(this.engine, 'beforeUpdate', this.applyGravity);
-
-    // After update event to update trails
-    Matter.Events.on(this.engine, 'afterUpdate', this.updateTrails);
-  }
-
-  // Initialize the bodies with given parameters
-  public initBodies(bodyParams: BodyParams[]): Body[] {
-    // Clear any existing bodies
-    this.bodies.forEach((body: Body) => {
-      Matter.Composite.remove(this.world, body.body);
-    });
-
-    this.bodies = [];
-
-    // Create new bodies
-    bodyParams.forEach((params: BodyParams, index: number) => {
-      const radius: number = params.radius || Math.sqrt(params.mass) * 4;
-
-      const body: Matter.Body = Matter.Bodies.circle(
-        params.x,
-        params.y,
-        radius,
-        {
-          frictionAir: 0,
-          friction: 0,
-          restitution: 1,
-          // Set initial velocity
-          velocity: { x: params.velocityX, y: params.velocityY }
-        }
-      );
-
-      // Set mass
-      Matter.Body.setMass(body, params.mass);
-
-      // Add body to world
-      Matter.Composite.add(this.world, body);
-
-      // Add to our bodies array with trail
-      this.bodies.push({
-        id: index + 1,
-        body,
-        mass: params.mass,
-        color: params.color,
-        trailColor: params.trailColor,
-        trail: [{
-          x: params.x,
-          y: params.y
-        }]
-      });
-    });
-
-    return this.bodies;
-  }
-
-  // Set the mass of a body by its array index
-  public setMass(index: number, mass: number): void {
-    if (index < 0 || index >= this.bodies.length) return;
-
-    const body: Body = this.bodies[index];
-
-    // Update mass in Matter.js physics engine
-    Matter.Body.setMass(body.body, mass);
-
-    // Update our record
-    body.mass = mass;
-  }
-
-  // Get the bodies for rendering
-  public getBodies(): Body[] {
-    return this.bodies;
-  }
-
-  // Set simulation speed
-  public setTimeScale(scale: number): void {
-    this.timeScale = scale;
-  }
-
-  // Update the simulation
-  public update(): void {
-    if (this.paused) return;
-
-    // Run the engine with our time scale
-    Matter.Engine.update(this.engine, 16.666 * this.timeScale);
-  }
-
-  // Toggle pause state
-  public togglePause(): boolean {
-    this.paused = !this.paused;
-    if (this.paused) {
-      Matter.Runner.stop(this.runner);
-    } else {
-      Matter.Runner.start(this.runner, this.engine);
-    }
-    return this.paused;
-  }
-
-  // Reset body positions and velocities
-  public resetBodies(): void {
-    const centerX = this.width / 2;
-    const centerY = this.height / 2;
-    
-    if (this.bodies.length === 2) {
-      // For a two-body system, set them up in a basic orbital configuration
-      const distance = Math.min(this.width, this.height) * 0.2;
-      
-      // Body 1: Central mass (stationary)
-      Matter.Body.setPosition(this.bodies[0].body, {
-        x: centerX,
-        y: centerY
-      });
-      Matter.Body.setVelocity(this.bodies[0].body, {
-        x: 0,
-        y: 0
-      });
-      
-      // Body 2: Orbiting body
-      Matter.Body.setPosition(this.bodies[1].body, {
-        x: centerX + distance,
-        y: centerY
-      });
-      
-      // Calculate orbital velocity based on central body mass
-      const orbitalVelocity = Math.sqrt((this.G * this.bodies[0].mass) / distance) * 0.6;
-      
-      Matter.Body.setVelocity(this.bodies[1].body, {
-        x: 0,
-        y: orbitalVelocity
-      });
-      
-      // Clear trails
-      this.bodies.forEach((body, i) => {
-        const pos = body.body.position;
-        body.trail = [{ x: pos.x, y: pos.y }];
-      });
-    }
-  }
-
-  // Properly destroy the physics engine and clear bodies
-  public destroy(): void {
-    // Stop the runner
-    Matter.Runner.stop(this.runner);
-
-    // Remove all bodies from the world
-    this.bodies.forEach((body: Body) => {
-      Matter.Composite.remove(this.world, body.body);
-    });
-
-    // Clear our bodies array
-    this.bodies = [];
-
-    // Clear all events
-    Matter.Events.off(this.engine, 'beforeUpdate', this.applyGravity);
-    Matter.Events.off(this.engine, 'afterUpdate', this.updateTrails);
-
-    // Clear the world and engine
-    Matter.World.clear(this.world, false);
-    Matter.Engine.clear(this.engine);
-  }
-
-  // Private methods
-  private applyGravity = (): void => {
-    if (this.paused) return;
-
-    // Apply gravitational forces between all pairs of bodies
-    for (let i: number = 0; i < this.bodies.length; i++) {
-      for (let j: number = i + 1; j < this.bodies.length; j++) {
-        const bodyA: Matter.Body = this.bodies[i].body;
-        const bodyB: Matter.Body = this.bodies[j].body;
-
-        // Calculate distance between bodies
-        const dx: number = bodyB.position.x - bodyA.position.x;
-        const dy: number = bodyB.position.y - bodyA.position.y;
-        const distanceSq: number = dx * dx + dy * dy;
-        const distance: number = Math.sqrt(distanceSq);
-
-        // Avoid division by zero and unrealistic forces at very close distances
-        if (distanceSq === 0 || distance < 1) continue;
-
-        // Calculate gravitational force magnitude: F = G * (m1 * m2) / r^2
-        const forceMagnitude: number =
-          this.G * bodyA.mass * bodyB.mass / distanceSq;
-
-        // Calculate force components
-        const force: { x: number; y: number } = {
-          x: (forceMagnitude * dx) / distance,
-          y: (forceMagnitude * dy) / distance
-        };
-
-        // Apply forces to both bodies (Newton's third law)
-        Matter.Body.applyForce(bodyA, bodyA.position, force);
-        Matter.Body.applyForce(bodyB, bodyB.position, {
-          x: -force.x,
-          y: -force.y
-        });
-      }
-    }
-    
-    // Cap velocity of all bodies
-    this.bodies.forEach((body) => {
-      const velocity = body.body.velocity;
-      const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-      
-      if (speed > MAX_VELOCITY) {
-        const ratio = MAX_VELOCITY / speed;
-        Matter.Body.setVelocity(body.body, {
-          x: velocity.x * ratio,
-          y: velocity.y * ratio
-        });
-      }
-    });
+  const calculateRadius = (mass: number, baseRadius: number) => {
+    return baseRadius * Math.pow(mass / 1000, 1 / 3); // Ajuste o fator de escala conforme necessário
   };
 
-  private updateTrails = (): void => {
-    if (this.paused) return;
-
-    // Update trail for each body
-    this.bodies.forEach((body: Body) => {
-      const lastPoint = body.trail[body.trail.length - 1];
-      const currentPos = body.body.position;
-
-      // Only add a point if it's sufficiently different from the last one
-      const minDistance = 1; // Minimum distance to add a new point
-      const dx = currentPos.x - lastPoint.x;
-      const dy = currentPos.y - lastPoint.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance > minDistance) {
-        body.trail.push({
-          x: currentPos.x,
-          y: currentPos.y
-        });
-
-        // Limit trail length
-        if (body.trail.length > MAX_TRAIL_POINTS) {
-          body.trail.shift();
-        }
-      }
-    });
+  const updateSunMass = (newMass: number) => {
+    const stateUpdate = { ...stateRef.current };
+    stateUpdate.sun.mass = newMass;
+    stateUpdate.sun.radius = calculateRadius(newMass, 60); // Atualizar o raio do Sol
+    stateRef.current = stateUpdate;
+  };
+  
+  const updatePlanetMass = (newMass: number) => {
+    const stateUpdate = { ...stateRef.current };
+    stateUpdate.planet.mass = newMass;
+    stateUpdate.planet.radius = calculateRadius(newMass, 25); // Atualizar o raio do Planeta
+    stateRef.current = stateUpdate;
+  };
+  
+  const updateOrbitRadius = (newRadius: number) => {
+    const stateUpdate = { ...stateRef.current };
+    const centerX = containerRef.current ? containerRef.current.clientWidth / 2 : 0;
+    const centerY = containerRef.current ? containerRef.current.clientHeight / 2 : 0;
+  
+    // Atualizar a posição do Planeta com base na nova distância orbital
+    stateUpdate.planet.position = { x: centerX + newRadius, y: centerY };
+    stateRef.current = stateUpdate;
+  };
+  
+  const updateGravity = (newGravity: number) => {
+    const stateUpdate = { ...stateRef.current };
+    stateUpdate.G = newGravity;
+    stateRef.current = stateUpdate;
   };
 
-  // Start the physics runner
-  public start(): void {
-    Matter.Runner.run(this.runner, this.engine);
-  }
+  const resetSimulation = (orbitRadius: number, sunMass: number, planetMass: number, gravity: number) => {
+    const stateUpdate = { ...stateRef.current };
+    const container = containerRef.current;
+  
+    if (!container) return;
+  
+    const centerX = container.clientWidth / 2;
+    const centerY = container.clientHeight / 2;
+  
+    // Atualizar o raio do Sol e do Planeta com base na massa
+    stateUpdate.sun.radius = calculateRadius(sunMass, 60); // Raio base do Sol
+    stateUpdate.planet.radius = calculateRadius(planetMass, 25); // Raio base do Planeta
+  
+    // Atualizar a massa do Sol e do Planeta
+    stateUpdate.sun.mass = sunMass;
+    stateUpdate.planet.mass = planetMass;
+  
+    // Posiciona o Sol no centro
+    stateUpdate.sun.position = { x: centerX, y: centerY };
+    stateUpdate.sun.velocity = { x: 0, y: 0 };
+    stateUpdate.sun.trail = [];
+  
+    // Posiciona o Planeta em uma órbita inicial
+    const orbitalVelocity = Math.sqrt((gravity * sunMass) / orbitRadius); // Velocidade orbital
+  
+    stateUpdate.planet.position = { x: centerX + orbitRadius, y: centerY };
+    stateUpdate.planet.velocity = { x: 0, y: orbitalVelocity };
+    stateUpdate.planet.trail = [];
+    stateUpdate.isPaused = true;
+    stateRef.current = stateUpdate;
+  };
+
+  const updateSimulation = (deltaTime: number) => {
+    if (stateRef.current.isPaused) return;
+
+    const state = { ...stateRef.current };
+    const timeStep = deltaTime * state.timeScale;
+
+    // Calcula a força gravitacional entre o Sol e o Planeta
+    const dx = state.planet.position.x - state.sun.position.x;
+    const dy = state.planet.position.y - state.sun.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance === 0) return; // Evita divisão por zero
+
+    const forceMagnitude = (G * state.sun.mass * state.planet.mass) / (distance * distance);
+    const force = {
+      x: (-forceMagnitude * dx) / distance,
+      y: (-forceMagnitude * dy) / distance
+    };
+
+    // Aplica a força ao Planeta (F = m * a => a = F / m)
+    const acceleration = {
+      x: force.x / state.planet.mass,
+      y: force.y / state.planet.mass
+    };
+
+    // Atualiza a velocidade do Planeta
+    state.planet.velocity.x += acceleration.x * timeStep;
+    state.planet.velocity.y += acceleration.y * timeStep;
+
+    // Atualiza a posição do Planeta
+    state.planet.position.x += state.planet.velocity.x * timeStep;
+    state.planet.position.y += state.planet.velocity.y * timeStep;
+
+    // Atualiza a trilha do Planeta
+    state.planet.trail.push({ ...state.planet.position });
+    if (state.planet.trail.length > 200) {
+      state.planet.trail.shift();
+    }
+
+    stateRef.current = state;
+  };
+
+  const animate = (time: number) => {
+    const deltaTime = lastTimeRef.current ? (time - lastTimeRef.current) / 16.666 : 1;
+    lastTimeRef.current = time;
+
+    updateSimulation(deltaTime);
+
+    if (!stateRef.current.isPaused) {
+      rafRef.current = requestAnimationFrame(animate);
+    }
+  };
+
+  useEffect(() => {
+    resetSimulation(orbitRadius, sunMass, planetMass, gravity);
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const togglePause = () => {
+    stateRef.current.isPaused = !stateRef.current.isPaused;
+
+    if (!stateRef.current.isPaused) {
+      lastTimeRef.current = performance.now();
+      rafRef.current = requestAnimationFrame(animate);
+    }
+
+    return stateRef.current.isPaused;
+  };
+
+  const setTimeScale = (scale: number) => {
+    stateRef.current.timeScale = scale;
+  };
+
+  return {
+    getState: () => ({ ...stateRef.current }), // Retornar o estado atual
+    resetSimulation,
+    togglePause,
+    setTimeScale,
+    updateSunMass,
+    updatePlanetMass,
+    updateOrbitRadius,
+    updateGravity
+  };
 }
