@@ -301,7 +301,17 @@ const RotationSimulation: React.FC = () => {
               onClick={handleTogglePause}
               className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
             >
-              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              {isPaused ? (
+                <>
+                  <Play className="h-4 w-4 mr-1" />
+                  Iniciar
+                </>
+              ) : (
+                <>
+                  <Pause className="h-4 w-4 mr-1" />
+                  Pausar
+                </>
+              )}
             </Button>
           </div>
         </div>
