@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,11 +9,14 @@ interface SimulationGuideProps {
 }
 
 const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
-  const toggleOpen = () => setIsOpen(!isOpen);
   const toggleMinimize = () => setIsMinimized(!isMinimized);
+
+  // Função para impedir a propagação do evento de scroll
+  const handleScroll = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.stopPropagation(); // Impede que o evento de scroll seja propagado para o elemento pai
+  };
 
   return (
     <div 
@@ -30,7 +32,10 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
           <ChevronUp size={18} />
         </Button>
       ) : (
-        <Card className="bg-black/60 backdrop-blur-md border-white/10 text-white overflow-hidden shadow-lg">
+        <Card 
+          className="bg-black/60 backdrop-blur-md border-white/10 text-white overflow-hidden shadow-lg"
+          onWheel={handleScroll} // Adiciona o manipulador de evento de scroll
+        >
           <CardHeader className="p-3 flex flex-row items-center justify-between bg-black/40">
             <CardTitle className="text-md flex items-center gap-2">
               <Book size={18} />
@@ -43,27 +48,18 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
                 className="h-7 w-7 rounded-full hover:bg-white/10"
                 onClick={toggleMinimize}
               >
-                <ChevronDown size={16} />
+                <X size={16} /> {/* Ícone de fechar */}
               </Button>
             </div>
           </CardHeader>
           
-          <div className={`overflow-y-auto transition-all duration-300 max-h-[60vh] ${isOpen ? 'max-h-[60vh]' : 'max-h-0'}`}>
+          <div 
+            className="overflow-y-auto max-h-[60vh]"
+            onWheel={handleScroll} // Adiciona o manipulador de evento de scroll
+          >
             <CardContent className="p-3 text-sm">
               {content}
             </CardContent>
-          </div>
-          
-          <div className="p-2 bg-black/40 text-center">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-xs hover:bg-white/10"
-              onClick={toggleOpen}
-            >
-              {isOpen ? 'Ocultar detalhes' : 'Mostrar detalhes'}
-              {isOpen ? <ChevronUp size={14} className="ml-1" /> : <ChevronDown size={14} className="ml-1" />}
-            </Button>
           </div>
         </Card>
       )}
