@@ -25,10 +25,10 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
       {isMinimized ? (
         <Button 
           onClick={toggleMinimize} 
-          className="flex items-center gap-2 bg-black/60 backdrop-blur-sm hover:bg-black/80"
+          className="flex items-center gap-2 text-white/80 bg-black/80 backdrop-blur-sm hover:bg-black/80"
         >
           <Book size={18} />
-          <span>Guia do Professor</span>
+          <span>Explicação</span>
           <ChevronUp size={18} />
         </Button>
       ) : (
