@@ -7,6 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Pause, Play, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 
+// Constantes reais (valores físicos)
+const REAL_SUN_MASS = 1.98892e30;    // kg
+const REAL_PLANET_MASS = 5.9742e24;  // kg
+
+// Constantes escaladas para a simulação
+const SCALE_FACTOR = 1e24; // Fator de escala para reduzir os valores
+const SCALED_SUN_MASS = REAL_SUN_MASS / SCALE_FACTOR;    // ~1.98892
+const SCALED_PLANET_MASS = REAL_PLANET_MASS / SCALE_FACTOR;  // ~0.0059742
 
 const TwoBodySimulation: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -16,16 +24,14 @@ const TwoBodySimulation: React.FC = () => {
   const [startDragPosition, setStartDragPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [speed, setSpeed] = useState<number>(1);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [sunMass, setSunMass] = useState<number>(1000);
-  const [planetMass, setPlanetMass] = useState<number>(10);
-  const [orbitRadius, setOrbitRadius] = useState<number>(200);
-  const [gravity, setGravity] = useState<number>(1);
+  const [sunMass, setSunMass] = useState<number>(SCALED_SUN_MASS);
+  const [planetMass, setPlanetMass] = useState<number>(SCALED_PLANET_MASS);
+  const [orbitRadius, setOrbitRadius] = useState<number>(400);
 
   const [
     { sun, planet, isPaused, dimensions, resetKey },
-    { resetSimulation, handleTogglePause, handleSpeedChange }
-  ] = useTwoBodySimulation(containerRef, orbitRadius, sunMass, planetMass, gravity);
-
+    { resetSimulation, handleTogglePause, handleSpeedChange, updateSunMass, updatePlanetMass, updateOrbitRadius }
+  ] = useTwoBodySimulation(containerRef, orbitRadius, sunMass, planetMass);
 
   const handleSpeedChangeLocal = (value: number[]) => {
     const newSpeed = value[0];
@@ -33,15 +39,25 @@ const TwoBodySimulation: React.FC = () => {
     handleSpeedChange(newSpeed);
   };
 
+  // Atualizei o cálculo das forças para usar valores consistentes
   const calculateGravitationalForce = () => {
+    const G = 6.67408e-11; // Constante gravitacional real
     const distance = orbitRadius;
     if (distance === 0) return 0;
-    return (gravity * sunMass * planetMass) / (distance * distance);
+    return (G * (sunMass * SCALE_FACTOR) * (planetMass * SCALE_FACTOR)) / (distance * distance);
   };
 
   const calculateCentripetalForce = () => {
-    const velocity = Math.sqrt((gravity * sunMass) / orbitRadius);
-    return (planetMass * velocity * velocity) / orbitRadius;
+    const G = 6.67408e-11;
+    const distance = orbitRadius;
+    const velocity = Math.sqrt((G * (sunMass * SCALE_FACTOR)) / distance);
+    return ((planetMass * SCALE_FACTOR) * velocity * velocity) / distance;
+  };
+  
+  const formatScientific = (value: number) => {
+    if (value === SCALED_SUN_MASS) return "1.98892 × 10³⁰ kg";
+    if (value === SCALED_PLANET_MASS) return "5.9742 × 10²⁴ kg";
+    return value.toExponential(2);
   };
 
   const guideContent = (
@@ -56,22 +72,23 @@ const TwoBodySimulation: React.FC = () => {
           Gravitação Universal: F = G * M * m / r²
           <br />
           <span className="text-sm text-gray-400">
-            F = {gravity.toFixed(2)} * {sunMass.toFixed(2)} * {planetMass.toFixed(2)} / {orbitRadius.toFixed(2)}² = {calculateGravitationalForce().toFixed(2)} N
+            F = 6.67408 × 10⁻¹¹ * {formatScientific(sunMass)} * {formatScientific(planetMass)} / {orbitRadius.toFixed(2)}² = {calculateGravitationalForce().toExponential(2)} N
           </span>
         </li>
         <li>
           Força Centrípeta: F = m * v² / r
           <br />
           <span className="text-sm text-gray-400">
-            F = {planetMass.toFixed(2)} * {Math.sqrt((gravity * sunMass) / orbitRadius).toFixed(2)}² / {orbitRadius.toFixed(2)} = {calculateCentripetalForce().toFixed(2)} N
+            F = {formatScientific(planetMass)} * {Math.sqrt((6.67408e-11 * (sunMass * SCALE_FACTOR)) / orbitRadius).toExponential(2)}² / {orbitRadius.toFixed(2)} = {calculateCentripetalForce().toExponential(2)} N
           </span>
         </li>
       </ul>
       
-      <h3 className="font-bold">Sugestões para o Professor:</h3>
-      <ul className="list-disc pl-5 space-y-1">
-        <li>Ajuste a massa do Sol e do Planeta para observar como isso afeta a órbita.</li>
-        <li>Altere a distância orbital e a velocidade inicial do Planeta.</li>
+      <h3 className="font-bold">Valores Reais:</h3>
+      <ul className="list-disc pl-5 space-y-1 text-sm text-gray-400">
+        <li>Constante Gravitacional (G): 6.67408 × 10⁻¹¹ N.m²/kg²</li>
+        <li>Massa do Sol: 1.98892 × 10³⁰ kg</li>
+        <li>Massa da Terra: 5.9742 × 10²⁴ kg</li>
       </ul>
     </div>
   );
@@ -126,6 +143,21 @@ const TwoBodySimulation: React.FC = () => {
     setZoomLevel(prev => Math.max(prev - 0.2, 0.4));
   };
 
+  // Funções para converter entre escala logarítmica e valores reais
+  const massToSliderValue = (mass: number, min: number, max: number) => {
+    const logMass = Math.log10(mass);
+    const logMin = Math.log10(min);
+    const logMax = Math.log10(max);
+    return (logMass - logMin) / (logMax - logMin) * 100;
+  };
+
+  const sliderValueToMass = (value: number, min: number, max: number) => {
+    const logMin = Math.log10(min);
+    const logMax = Math.log10(max);
+    const logMass = logMin + (value / 100) * (logMax - logMin);
+    return Math.pow(10, logMass);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -151,8 +183,8 @@ const TwoBodySimulation: React.FC = () => {
         title="Guia: Simulação de Dois Corpos"
         content={guideContent}
       />
-       {/* Zoom controls */}
-       <div className="absolute top-24 right-4 flex flex-col gap-2 z-10">
+      
+      <div className="absolute top-24 right-4 flex flex-col gap-2 z-10">
         <Button 
           variant="outline" 
           size="icon" 
@@ -171,79 +203,83 @@ const TwoBodySimulation: React.FC = () => {
         </Button>
       </div>
 
-      {/* Controles */}
-      <div 
-        className={`control-panel fixed right-4 bottom-4 p-4 rounded-lg z-10 w-80 transition-all duration-300 ease-in-out ${showControls ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-20'}`}
+      <div className={`control-panel fixed right-4 bottom-4 p-4 rounded-lg z-10 w-80 transition-all duration-300 ease-in-out ${showControls ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-20'}`}
         onMouseEnter={() => setShowControls(true)}
         onMouseLeave={() => setShowControls(false)}
       >
         <div className="mb-6">
           <h3 className="text-white text-lg font-semibold mb-2">Simulação de Dois Corpos</h3>
           <p className="text-xs text-gray-300 mb-4">
-            Ajuste as massas e a velocidade para observar como isso afeta a órbita.
+            Ajuste as massas e a distância para observar como isso afeta a órbita.
           </p>
         </div>
        
         <div className="space-y-6">
-        {/* Controle de massa do Sol */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-sm text-gray-300">Massa do Sol</label>
-            <span className="text-xs text-gray-400">{sunMass.toFixed(1)}</span>
+          {/* Controle de massa do Sol */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-300">Massa do Sol (kg)</label>
+              <span className="text-xs text-gray-400">{formatScientific(sunMass)}</span>
+            </div>
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[massToSliderValue(sunMass, SCALED_SUN_MASS/100, SCALED_SUN_MASS*100)]}
+              onValueChange={(value) => {
+                const newMass = sliderValueToMass(value[0], SCALED_SUN_MASS/100, SCALED_SUN_MASS*100);
+                setSunMass(newMass);
+                updateSunMass(newMass);
+              }}
+            />
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{formatScientific(SCALED_SUN_MASS/100)}</span>
+              <span className="font-bold">Real: {formatScientific(SCALED_SUN_MASS)}</span>
+              <span>{formatScientific(SCALED_SUN_MASS*100)}</span>
+            </div>
           </div>
-          <Slider
-            min={500}
-            max={5000}
-            step={100}
-            value={[sunMass]}
-            onValueChange={(value) => setSunMass(value[0])}
-          />
-        </div>
 
-        {/* Controle de massa do Planeta */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-sm text-gray-300">Massa do Planeta</label>
-            <span className="text-xs text-gray-400">{planetMass.toFixed(1)}</span>
-          </div>
-          <Slider
-            min={1}
-            max={200}
-            step={1}
-            value={[planetMass]}
-            onValueChange={(value) => setPlanetMass(value[0])}
-          />
-        </div>
+          {/* Controle de massa do Planeta */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-300">Massa do Planeta (kg)</label>
+              <span className="text-xs text-gray-400">{formatScientific(planetMass)}</span>
+            </div>
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[massToSliderValue(planetMass, SCALED_PLANET_MASS/100, SCALED_PLANET_MASS*100)]}
+              onValueChange={(value) => {
+                const newMass = sliderValueToMass(value[0], SCALED_PLANET_MASS/100, SCALED_PLANET_MASS*100);
+                setPlanetMass(newMass);
+                updatePlanetMass(newMass);
+              }}
+            />
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{formatScientific(SCALED_PLANET_MASS/100)}</span>
+              <span className="font-bold">Real: {formatScientific(SCALED_PLANET_MASS)}</span>
+              <span>{formatScientific(SCALED_PLANET_MASS*100)}</span>
+            </div>
+          </div>  
 
-        {/* Controle de distância orbital */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-sm text-gray-300">Distância Orbital</label>
-            <span className="text-xs text-gray-400">{orbitRadius.toFixed(1)}</span>
+          {/* Controle de distância orbital */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-300">Distância Orbital</label>
+              <span className="text-xs text-gray-400">{orbitRadius.toFixed(1)}</span>
+            </div>
+            <Slider
+              min={100}
+              max={500}
+              step={10}
+              value={[orbitRadius]}
+              onValueChange={(value) => {
+                setOrbitRadius(value[0]);
+                updateOrbitRadius(value[0]);
+              }}
+            />
           </div>
-          <Slider
-            min={100}
-            max={500}
-            step={10}
-            value={[orbitRadius]}
-            onValueChange={(value) => setOrbitRadius(value[0])}
-          />
-        </div>
-
-        {/* Controle de gravidade (G) */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-sm text-gray-300">Gravidade (G)</label>
-            <span className="text-xs text-gray-400">{gravity.toFixed(1)}</span>
-          </div>
-          <Slider
-            min={0.1}
-            max={10}
-            step={0.1}
-            value={[gravity]}
-            onValueChange={(value) => setGravity(value[0])}
-          />
-        </div>
 
           {/* Controle de velocidade */}
           <div className="space-y-1">
@@ -274,10 +310,10 @@ const TwoBodySimulation: React.FC = () => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleTogglePause} // Usando handleTogglePause
+              onClick={handleTogglePause}
               className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300"
             >
-              {isPaused ? ( // Verificando o estado isPaused
+              {isPaused ? (
                 <>
                   <Play className="h-4 w-4 mr-1" />
                   Iniciar
@@ -294,7 +330,7 @@ const TwoBodySimulation: React.FC = () => {
         
         <div className="mt-6 pt-4 border-t border-gray-800">
           <p className="text-xs text-gray-400 italic">
-            A simulação usa a Lei da Gravitação Universal e a Força Centrípeta para calcular a órbita.
+            Constante Gravitacional (G) fixa em 6.67408 × 10⁻¹¹ N.m²/kg²
           </p>
         </div>
       </div>

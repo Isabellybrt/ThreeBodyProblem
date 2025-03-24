@@ -16,20 +16,18 @@ export interface TwoBodySimulationActions {
   resetSimulation: () => void;
   handleTogglePause: () => void;
   handleSpeedChange: (speed: number) => void;
-  updateSunMass: (newMass: number) => void;      // Adicionar função para atualizar a massa do Sol
-  updatePlanetMass: (newMass: number) => void;   // Adicionar função para atualizar a massa do Planeta
-  updateOrbitRadius: (newRadius: number) => void; // Adicionar função para atualizar a distância orbital
-  updateGravity: (newGravity: number) => void;    // Adicionar função para atualizar a gravidade
+  updateSunMass: (newMass: number) => void;
+  updatePlanetMass: (newMass: number) => void;
+  updateOrbitRadius: (newRadius: number) => void;
 }
 
 export function useTwoBodySimulation(
   containerRef: React.RefObject<HTMLDivElement>,
   orbitRadius: number,
   sunMass: number,
-  planetMass: number,
-  gravity: number
+  planetMass: number
 ): [TwoBodySimulationState, TwoBodySimulationActions] {
-  const physicsRef = useRef(useTwoBodyPhysics(containerRef, orbitRadius, sunMass, planetMass, gravity));
+  const physicsRef = useRef(useTwoBodyPhysics(containerRef, orbitRadius, sunMass, planetMass));
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [isPaused, setIsPaused] = useState<boolean>(true);
   const [resetKey, setResetKey] = useState<number>(0);
@@ -50,16 +48,35 @@ export function useTwoBodySimulation(
     };
   }, []);
 
-  useEffect(() => {
-    // Atualizar a simulação com os novos parâmetros
-    physicsRef.current.resetSimulation(orbitRadius, sunMass, planetMass, gravity);
-    // Manter a simulação pausada enquanto os parâmetros são ajustados
-    setIsPaused(true);
-  }, [orbitRadius, sunMass, planetMass, gravity]);
+  // Adicionei um useEffect para sincronizar as dimensões do container
+useEffect(() => {
+  const updateDimensions = () => {
+    if (containerRef.current) {
+      setDimensions({
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight
+      });
+      // Reset a simulação quando as dimensões mudam
+      physicsRef.current.resetSimulation(orbitRadius, sunMass, planetMass);
+    }
+  };
+
+  // Atualiza imediatamente e configura o observer
+  updateDimensions();
+  const resizeObserver = new ResizeObserver(updateDimensions);
+  
+  if (containerRef.current) {
+    resizeObserver.observe(containerRef.current);
+  }
+
+  return () => {
+    resizeObserver.disconnect();
+  };
+}, [orbitRadius, sunMass, planetMass]);
   
   const resetSimulation = () => {
-    physicsRef.current.resetSimulation(orbitRadius, sunMass, planetMass, gravity); // Passando os argumentos
-    setIsPaused(true); // Forçar o estado isPaused para true após o reset
+    physicsRef.current.resetSimulation(orbitRadius, sunMass, planetMass);
+    setIsPaused(true);
     setResetKey(prev => prev + 1);
   };
 
@@ -83,10 +100,6 @@ export function useTwoBodySimulation(
   const updateOrbitRadius = (newRadius: number) => {
     physicsRef.current.updateOrbitRadius(newRadius);
   };
-  
-  const updateGravity = (newGravity: number) => {
-    physicsRef.current.updateGravity(newGravity);
-  };
 
   return [
     {
@@ -99,10 +112,9 @@ export function useTwoBodySimulation(
       resetSimulation,
       handleTogglePause,
       handleSpeedChange,
-      updateSunMass,      // Retornar a função para atualizar a massa do Sol
-      updatePlanetMass,   // Retornar a função para atualizar a massa do Planeta
-      updateOrbitRadius,  // Retornar a função para atualizar a distância orbital
-      updateGravity       // Retornar a função para atualizar a gravidade
+      updateSunMass,
+      updatePlanetMass,
+      updateOrbitRadius
     }
   ];
 }

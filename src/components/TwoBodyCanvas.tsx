@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect } from 'react';
 import { CelestialBody } from '@/utils/twoBodyPhysics';
 
@@ -28,17 +29,17 @@ const TwoBodyCanvas: React.FC<TwoBodyCanvasProps> = ({ sun, planet, width, heigh
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Limpar o canvas com uma cor de fundo
+    // Fundo escuro do espaço
     ctx.fillStyle = 'rgba(5, 8, 22, 1)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Aplicar o zoom e a translação da câmera
+    // Salvamos o contexto para aplicar transformações
     ctx.save();
     ctx.translate(canvas.width / 2 + cameraOffset.x, canvas.height / 2 + cameraOffset.y);
     ctx.scale(zoomLevel, zoomLevel);
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
-    // Desenhar a trilha do Planeta
+    // Desenha o rastro da órbita do planeta
     if (planet.trail.length > 1) {
       ctx.beginPath();
       ctx.moveTo(planet.trail[0].x, planet.trail[0].y);
@@ -46,55 +47,83 @@ const TwoBodyCanvas: React.FC<TwoBodyCanvasProps> = ({ sun, planet, width, heigh
         ctx.lineTo(planet.trail[i].x, planet.trail[i].y);
       }
       ctx.strokeStyle = 'rgba(52, 152, 219, 0.2)';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
 
-    // Desenhar o Sol
+    // Desenha os corpos celestes
     drawCelestialBody(ctx, sun);
-
-    // Desenhar o Planeta
     drawCelestialBody(ctx, planet);
 
+    // Restaura o contexto
     ctx.restore();
   };
 
   const drawCelestialBody = (ctx: CanvasRenderingContext2D, body: CelestialBody) => {
     const { position, radius, color } = body;
 
-    // Desenhar o brilho
+    // Reduzir o tamanho visual do Sol (mas não fisicamente)
+    // Reduzimos drasticamente a escala visual do Sol para ter um tamanho mais proporcional
+    const visualScale = body.id === 'sun' ? 0.10 : 1.0;
+    const visualRadius = radius * visualScale;
+    
+    // Ajuste do brilho para ser proporcional ao tamanho visual
+    const glowScale = body.id === 'sun' ? 1.4 : 1.5;
+    
+    // Cria gradiente circular para efeito de brilho
     const gradient = ctx.createRadialGradient(
-      position.x, position.y, radius * 0.5,
-      position.x, position.y, radius * 2
+      position.x, position.y, visualRadius * 0.5,
+      position.x, position.y, visualRadius * glowScale
     );
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    if (body.id === 'sun') {
+      gradient.addColorStop(0, '#FFFDE7'); // Núcleo branco-amarelado
+      gradient.addColorStop(0.2, color);    // Cor principal
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Transparente nas bordas
+    } else {
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    }
 
+    // Desenha o brilho
     ctx.beginPath();
     ctx.fillStyle = gradient;
-    ctx.arc(position.x, position.y, radius * 1.5, 0, Math.PI * 2);
+    ctx.arc(position.x, position.y, visualRadius * glowScale, 0, Math.PI * 2);
     ctx.fill();
 
-    // Desenhar o corpo principal
+    // Desenha o corpo propriamente dito
     ctx.beginPath();
-    ctx.fillStyle = color;
-    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = body.id === 'sun' ? '#FDB813' : color;
+    ctx.arc(position.x, position.y, visualRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Adiciona detalhes para o planeta (opcional)
+    if (body.id === 'planet') {
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.arc(position.x - visualRadius * 0.3, position.y - visualRadius * 0.3, visualRadius * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   };
 
-  // Loop de animação
   useEffect(() => {
     let animationFrameId: number;
+    let lastTimestamp: number | null = null;
+    const targetFPS = 60;
+    const frameInterval = 1000 / targetFPS;
+    // Aumentar a velocidade da animação (mas não da física)
+    const animationSpeedMultiplier = 2.5; 
 
-    const animate = () => {
-      renderSimulation();
+    const animate = (timestamp: number) => {
+      if (!lastTimestamp || timestamp - lastTimestamp >= frameInterval) {
+        lastTimestamp = timestamp;
+        renderSimulation();
+      }
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    // Iniciar o loop de animação
     animationFrameId = requestAnimationFrame(animate);
 
-    // Limpar o loop de animação ao desmontar o componente
     return () => {
       cancelAnimationFrame(animationFrameId);
     };

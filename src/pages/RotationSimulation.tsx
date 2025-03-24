@@ -60,31 +60,52 @@ const RotationSimulation: React.FC = () => {
 
   const guideContent = (
     <div className="space-y-4">
+      <h3 className="font-bold text-lg">Translação e Rotação de Corpos Celestes</h3>
       <p>
-        Esta simulação demonstra os conceitos de translação (movimento orbital) e rotação 
-        (giro em torno do próprio eixo) dos corpos celestes.
+        Esta simulação demonstra os movimentos fundamentais dos corpos celestes: 
+        <strong> translação</strong> (movimento orbital) e <strong>rotação</strong> 
+        (giro em torno do próprio eixo).
       </p>
       
-      <h3 className="font-bold">Conceitos Físicos:</h3>
-      <ul className="list-disc pl-5 space-y-1">
-        <li>Movimento orbital (translação)</li>
-        <li>Rotação axial</li>
-        <li>Período de translação e rotação</li>
-        <li>Sistemas de referência</li>
-      </ul>
+      <div className="space-y-3">
+        <h4 className="font-bold">Translação (Movimento Orbital)</h4>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Movimento de um corpo ao redor de outro devido à força gravitacional</li>
+          <li>Órbitas geralmente são elípticas, como descrito pelas Leis de Kepler</li>
+          <li>Período orbital: tempo para completar uma volta ao redor do corpo central</li>
+          <li>Exemplo: A Terra leva ~365 dias para orbitar o Sol (translação)</li>
+        </ul>
+      </div>
       
-      <h3 className="font-bold">Sugestões para o Professor:</h3>
-      <ul className="list-disc pl-5 space-y-1">
-        <li>Compare os períodos de rotação e translação</li>
-        <li>Demonstre o fenômeno de rotação sincronizada (como a Lua)</li>
-        <li>Explique como a linha branca indica a rotação do corpo</li>
-        <li>Discuta a formação de sistemas planetários</li>
-      </ul>
+      <div className="space-y-3">
+        <h4 className="font-bold">Rotação (Movimento Axial)</h4>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Giro de um corpo celeste em torno do seu próprio eixo</li>
+          <li>Determina a duração do dia no corpo celeste</li>
+          <li>Pode causar achatamento nos polos devido à força centrífuga</li>
+          <li>Exemplo: A Terra completa uma rotação em ~24 horas</li>
+        </ul>
+      </div>
       
-      <p className="italic text-xs text-gray-400 mt-2">
-        Nosso sistema solar contém exemplos interessantes: Mercúrio e Vênus 
-        têm rotações muito lentas, enquanto Júpiter completa uma rotação em apenas 10 horas.
-      </p>
+      <div className="space-y-3">
+        <h4 className="font-bold">Características Observáveis</h4>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>A <span className="text-white">linha branca</span> indica a rotação do corpo</li>
+          <li>Corpos podem ter rotação sincronizada (ex: Lua mostra sempre a mesma face para a Terra)</li>
+          <li>Velocidades de rotação e translação são independentes</li>
+          <li>Trajetórias mostram o caminho orbital dos corpos</li>
+        </ul>
+      </div>
+      
+      <div className="p-3 bg-gray-800 rounded-md">
+        <h4 className="font-bold text-sm mb-1">Exemplos no Sistema Solar</h4>
+        <ul className="text-xs space-y-1">
+          <li><strong>Mercúrio:</strong> Rotações lentas (58 dias terrestres) e translação rápida (88 dias)</li>
+          <li><strong>Vênus:</strong> Rotação retrógrada (sentido horário) e extremamente lenta (243 dias)</li>
+          <li><strong>Júpiter:</strong> Rotação rápida (10 horas) devido à sua composição gasosa</li>
+          <li><strong>Lua:</strong> Rotação sincronizada com sua translação ao redor da Terra</li>
+        </ul>
+      </div>
     </div>
   );
 
