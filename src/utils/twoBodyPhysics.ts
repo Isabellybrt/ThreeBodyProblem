@@ -1,218 +1,521 @@
 
-import { useRef, useEffect } from 'react';
+import { Bodies, Body, Composite, Engine, Events, Render, Runner, IEventCollision } from "matter-js";
 
-// Constantes escaladas para manter a simulação estável
-const SCALE_FACTOR = 1e10; // Fator de escala para reduzir os valores
-export const G = 6.67408; // G escalado (original 6.67408e-11)
+// Constants
+export const G = 6.67430e-11; // Universal gravitational constant
+export const scaleFactor = 1e9; // Scale factor to make forces visible in simulation
+export const maxTrailPoints = 150; // Maximum number of trail points
 
-export interface CelestialBody {
-  id: string;
-  position: { x: number; y: number };
-  radius: number;
-  color: string;
-  mass: number;
-  velocity: { x: number; y: number };
-  trail: { x: number; y: number }[];
-}
-
-export interface TwoBodySimulationState {
-  sun: CelestialBody;
-  planet: CelestialBody;
-  isPaused: boolean;
-  timeScale: number;
-}
-
-export function useTwoBodyPhysics(
-  containerRef: React.RefObject<HTMLDivElement>,
-  orbitRadius: number,
-  sunMass: number,
-  planetMass: number
-) {
-  // Valores escalados para a simulação
-  const BASE_SUN_RADIUS = 15; // Aumentado para ser visualmente maior
-  const BASE_PLANET_RADIUS = 5;
-  const SCALED_SUN_MASS = 1.98892;    // kg (original 1.98892e30)
-  const SCALED_PLANET_MASS = 0.0059742; // kg (original 5.9742e24)
-  const TIME_STEP_FACTOR = 5;  // Reduzido para maior estabilidade
-
-  // Função para calcular o raio baseado na massa
-  const calculateRadius = (mass: number, baseMass: number, baseRadius: number) => {
-    // Usamos raiz cúbica para manter proporção volume/massa
-    return baseRadius * Math.pow(mass / baseMass, 1/3);
+// Types
+export interface SimulationObjects {
+  engine: Matter.Engine;
+  render: Matter.Render;
+  runner: Matter.Runner;
+  body01: Matter.Body;
+  body02: Matter.Body;
+  trailPositions: { x: number; y: number }[];
+  initialParams: {
+    sunMass: number;
+    planetMass: number;
+    initialVelocity: number;
+    orbitalDistance: number;
+    simulationSpeed: number;
   };
+}
 
-  const stateRef = useRef<TwoBodySimulationState>({
-    sun: {
-      id: 'sun',
-      position: { x: 0, y: 0 },
-      radius: calculateRadius(sunMass || SCALED_SUN_MASS, SCALED_SUN_MASS, BASE_SUN_RADIUS),
-      color: '#FDB813',
-      mass: sunMass || SCALED_SUN_MASS,
-      velocity: { x: 0, y: 0 },
-      trail: []
+// Calculate body size based on mass
+const calculateBodySize = (mass: number, isSun: boolean) => {
+  if (isSun) {
+    // Sun size calculation: base size + square root scaling
+    return 20 + Math.sqrt(mass) * 0.8;
+  } else {
+    // Planet size calculation: smaller base size + linear scaling
+    return 10 + mass * 0.15;
+  }
+};
+
+// Initialize physics simulation
+export const initPhysicsSimulation = (
+  container: HTMLElement, 
+  sunMass: number = 900, 
+  planetMass: number = 1, 
+  initialVelocity: number = 4,
+  orbitalDistance: number = 400,
+  simulationSpeed: number = 1 
+): SimulationObjects => {
+  // Create engine
+  const engine = Engine.create();
+  engine.gravity.y = 0; // Disable gravity
+
+  // Create renderer
+  const render = Render.create({
+    element: container,
+    engine: engine,
+    options: {
+      width: container.clientWidth,
+      height: container.clientHeight,
+      wireframes: false,
+      background: '#000000',
+      pixelRatio: window.devicePixelRatio
     },
-    planet: {
-      id: 'planet',
-      position: { x: 0, y: 0 },
-      radius: calculateRadius(planetMass || SCALED_PLANET_MASS, SCALED_PLANET_MASS, BASE_PLANET_RADIUS),
-      color: '#3498db',
-      mass: planetMass || SCALED_PLANET_MASS,
-      velocity: { x: 0, y: 0 },
-      trail: []
-    },
-    isPaused: true,
-    timeScale: 1
   });
-
-  const rafRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(0);
-
-  const updateSunMass = (newMass: number) => {
-    const stateUpdate = { ...stateRef.current };
-    stateUpdate.sun.mass = newMass;
-    stateUpdate.sun.radius = calculateRadius(newMass, SCALED_SUN_MASS, BASE_SUN_RADIUS);
-    stateRef.current = stateUpdate;
-  };
   
-  const updatePlanetMass = (newMass: number) => {
-    const stateUpdate = { ...stateRef.current };
-    stateUpdate.planet.mass = newMass;
-    stateUpdate.planet.radius = calculateRadius(newMass, SCALED_PLANET_MASS, BASE_PLANET_RADIUS);
-    stateRef.current = stateUpdate;
-  };
-  
-  const updateOrbitRadius = (newRadius: number) => {
-    const stateUpdate = { ...stateRef.current };
-    const centerX = containerRef.current ? containerRef.current.clientWidth / 2 : 0;
-    const centerY = containerRef.current ? containerRef.current.clientHeight / 2 : 0;
-  
-    stateUpdate.planet.position = { x: centerX + newRadius, y: centerY };
-    stateRef.current = stateUpdate;
-  };
+  const runner = Runner.create();
+  runner.delta = (1000/60) / Math.max(0.1, Math.min(simulationSpeed, 10));
 
-  // Atualizei a função resetSimulation para calcular corretamente a velocidade orbital
-const resetSimulation = (orbitRadius: number, sunMass: number, planetMass: number) => {
-  const stateUpdate = { ...stateRef.current };
-  const container = containerRef.current;
+  // Calculate body sizes based on mass
+  const sunSize = calculateBodySize(sunMass, true);
+  const planetSize = calculateBodySize(planetMass, false);
 
-  if (!container) return;
-
+  // Calculate center position
   const centerX = container.clientWidth / 2;
   const centerY = container.clientHeight / 2;
 
-  // Atualizar massas e raios
-  stateUpdate.sun.mass = sunMass;
-  stateUpdate.sun.radius = calculateRadius(sunMass, SCALED_SUN_MASS, BASE_SUN_RADIUS);
-  stateUpdate.planet.mass = planetMass;
-  stateUpdate.planet.radius = calculateRadius(planetMass, SCALED_PLANET_MASS, BASE_PLANET_RADIUS);
+  // Create sun (body01) at center
+  const body01 = Bodies.circle(
+    centerX, 
+    centerY, 
+    sunSize, 
+    { 
+      mass: sunMass, 
+      frictionAir: 0, 
+      friction: 0, 
+      frictionStatic: 0, 
+      restitution: 0,
+      isStatic: false, 
+      render: {
+        fillStyle: '#f5a623',
+        strokeStyle: '#f7b955',
+        lineWidth: 2
+      } 
+    }
+  );
+  
+  // Create planet (body02) at a distance from the sun
+  const body02 = Bodies.circle(
+    centerX + orbitalDistance, 
+    centerY, 
+    planetSize, 
+    { 
+      mass: planetMass, 
+      frictionAir: 0, 
+      friction: 0, 
+      frictionStatic: 0, 
+      restitution: 0,
+      render: {
+        fillStyle: '#4da6ff',
+        strokeStyle: '#75b9ff',
+        lineWidth: 1
+      } 
+    }
+  );
+  Render.world(render);
+  // Calculate initial velocity perpendicular to the line between bodies
+  const dx_initial = body02.position.x - body01.position.x;
+  const dy_initial = body02.position.y - body01.position.y;
+  const distance_initial = Math.sqrt(dx_initial * dx_initial + dy_initial * dy_initial);
 
-  // Posiciona o Sol no centro
-  stateUpdate.sun.position = { x: centerX, y: centerY };
-  stateUpdate.sun.velocity = { x: 0, y: 0 };
-  stateUpdate.sun.trail = [];
+  // Calculate perpendicular vector (rotate 90 degrees counterclockwise)
+  const perpendicular = {
+    x: -dy_initial / distance_initial,
+    y: dx_initial / distance_initial,
+  };
 
-  // Calcula a velocidade orbital correta para uma órbita estável
-  // v = sqrt(G * M / r)
-  const orbitalVelocity = Math.sqrt((G * stateUpdate.sun.mass) / orbitRadius);
+  // Apply initial velocity to body02
+  Body.setVelocity(body02, {
+    x: perpendicular.x * initialVelocity,
+    y: perpendicular.y * initialVelocity,
+  });
 
-  // Posiciona o Planeta na distância correta com velocidade tangencial
-  stateUpdate.planet.position = { x: centerX + orbitRadius, y: centerY };
-  stateUpdate.planet.velocity = { x: 0, y: orbitalVelocity };
-  stateUpdate.planet.trail = [];
-  stateUpdate.isPaused = true;
-  stateRef.current = stateUpdate;
+  // Add bodies to the world
+  Composite.add(engine.world, [body01, body02]);
+
+  // Set time scale for simulation speed
+  runner.delta = 1000/60;
+
+  // Array to store trail positions
+  const trailPositions: { x: number; y: number }[] = [];
+
+  return { 
+    engine, 
+    render, 
+    runner, 
+    body01, 
+    body02, 
+    trailPositions,
+    initialParams: {
+      sunMass,
+      planetMass,
+      initialVelocity,
+      orbitalDistance,
+      simulationSpeed: 1
+    }
+  };
 };
 
-// Atualizei a função updateSimulation para melhorar a física
-const updateSimulation = (deltaTime: number) => {
-  if (stateRef.current.isPaused) return;
+export const updateSimulationParameters = (
+  simulation: SimulationObjects, 
+  params: {
+    sunMass?: number;
+    planetMass?: number;
+    initialVelocity?: number;
+    simulationSpeed?: number;
+    orbitalDistance?: number;
+  }
+) => {
+  const { body01, body02, render, initialParams, runner } = simulation;
 
-  const state = { ...stateRef.current };
-  const timeStep = (deltaTime * state.timeScale * TIME_STEP_FACTOR) / 1000;
-
-  // Calcula a força gravitacional entre o Sol e o Planeta
-  const dx = state.planet.position.x - state.sun.position.x;
-  const dy = state.planet.position.y - state.sun.position.y;
-  const distanceSquared = dx * dx + dy * dy;
-  const distance = Math.sqrt(distanceSquared);
-  
-  // Evita divisão por zero e instabilidades numéricas
-  if (distance < 1) return;
-
-  // Cálculo da força gravitacional
-  const forceMagnitude = (G * state.sun.mass * state.planet.mass) / distanceSquared;
-  const forceDirection = {
-    x: dx / distance,
-    y: dy / distance
-  };
-
-  // Aplica a força ao Planeta (o Sol permanece fixo neste modelo simplificado)
-  const acceleration = {
-    x: -forceDirection.x * forceMagnitude / state.planet.mass,
-    y: -forceDirection.y * forceMagnitude / state.planet.mass
-  };
-
-  // Atualiza velocidade e posição usando Verlet integration para maior estabilidade
-  const newVelocity = {
-    x: state.planet.velocity.x + acceleration.x * timeStep,
-    y: state.planet.velocity.y + acceleration.y * timeStep
-  };
-
-  state.planet.position.x += (state.planet.velocity.x + newVelocity.x) * 0.5 * timeStep;
-  state.planet.position.y += (state.planet.velocity.y + newVelocity.y) * 0.5 * timeStep;
-  state.planet.velocity = newVelocity;
-
-  // Atualiza a trilha do Planeta
-  state.planet.trail.push({ ...state.planet.position });
-  if (state.planet.trail.length > 200) {
-    state.planet.trail.shift();
+  // Atualiza a velocidade da simulação
+  if (params.simulationSpeed !== undefined) {
+    // Mantém a física original, apenas ajusta a velocidade de execução
+    runner.delta = (1000/60) / Math.max(0.1, Math.min(params.simulationSpeed, 10));
+    simulation.initialParams.simulationSpeed = params.simulationSpeed;
   }
 
-  stateRef.current = state;
+  // Atualiza o Sol (body01)
+  if (params.sunMass !== undefined && params.sunMass !== body01.mass) {
+    const newSize = calculateBodySize(params.sunMass, true);
+    const scaleFactor = newSize / body01.circleRadius;
+    
+    Body.scale(body01, scaleFactor, scaleFactor);
+    Body.setMass(body01, params.sunMass);
+    initialParams.sunMass = params.sunMass;
+  }
+
+  // Atualiza o Planeta (body02)
+  if (params.planetMass !== undefined && params.planetMass !== body02.mass) {
+    const newSize = calculateBodySize(params.planetMass, false);
+    const scaleFactor = newSize / body02.circleRadius;
+    
+    Body.scale(body02, scaleFactor, scaleFactor);
+    Body.setMass(body02, params.planetMass);
+    initialParams.planetMass = params.planetMass;
+  }
+
+  // Atualiza a distância orbital
+  if (params.orbitalDistance !== undefined && 
+      params.orbitalDistance !== initialParams.orbitalDistance) {
+    
+    const centerX = render.options.width! / 2;
+    const centerY = render.options.height! / 2;
+    
+    // Calcula a nova posição mantendo o ângulo atual
+    const currentAngle = Math.atan2(
+      body02.position.y - body01.position.y,
+      body02.position.x - body01.position.x
+    );
+    
+    const newPosition = {
+      x: body01.position.x + Math.cos(currentAngle) * params.orbitalDistance,
+      y: body01.position.y + Math.sin(currentAngle) * params.orbitalDistance
+    };
+    
+    Body.setPosition(body02, newPosition);
+    initialParams.orbitalDistance = params.orbitalDistance;
+  }
+
+  // Atualiza a velocidade inicial se necessário
+  if (params.initialVelocity !== undefined && 
+      params.initialVelocity !== initialParams.initialVelocity) {
+    
+    initialParams.initialVelocity = params.initialVelocity;
+    
+    const dx = body02.position.x - body01.position.x;
+    const dy = body02.position.y - body01.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    const perpendicular = {
+      x: -dy / distance,
+      y: dx / distance
+    };
+    
+    Body.setVelocity(body02, {
+      x: perpendicular.x * params.initialVelocity,
+      y: perpendicular.y * params.initialVelocity
+    });
+  }
+
+  // Força o redesenho imediato
+  Render.world(render);
 };
 
-  const animate = (time: number) => {
-    const deltaTime = lastTimeRef.current ? (time - lastTimeRef.current) / 16.666 : 1;
-    lastTimeRef.current = time;
+// Start the simulation
+export const startSimulation = (simulation: SimulationObjects): void => {
+  Runner.start(simulation.runner, simulation.engine);
+  Render.run(simulation.render);
+};
 
-    updateSimulation(deltaTime);
+// Stop the simulation
+export const stopSimulation = (simulation: SimulationObjects): void => {
+  Runner.stop(simulation.runner);
+  Render.stop(simulation.render);
+};
 
-    if (!stateRef.current.isPaused) {
-      rafRef.current = requestAnimationFrame(animate);
-    }
+// Reset the simulation
+// Adicione esta função ao seu twoBodyPhysics.ts
+export const resetSimulation = (simulation: SimulationObjects): void => {
+  const { engine, render, body01, body02, trailPositions, initialParams } = simulation;
+  
+  // 1. Para a simulação
+  stopSimulation(simulation);
+  
+  // 2. Calcula as posições iniciais
+  const centerX = render.options.width! / 2;
+  const centerY = render.options.height! / 2;
+  
+  // 3. Reseta as posições dos corpos
+  Body.setPosition(body01, { x: centerX, y: centerY });
+  Body.setVelocity(body01, { x: 0, y: 0 });
+  
+  Body.setPosition(body02, { 
+    x: centerX + initialParams.orbitalDistance, 
+    y: centerY 
+  });
+  
+  // 4. Reseta a velocidade do planeta (body02)
+  const dx = body02.position.x - body01.position.x;
+  const dy = body02.position.y - body01.position.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const perpendicular = {
+    x: -dy / distance,
+    y: dx / distance,
   };
+  
+  Body.setVelocity(body02, {
+    x: perpendicular.x * initialParams.initialVelocity,
+    y: perpendicular.y * initialParams.initialVelocity,
+  });
+  
+  // 5. Limpa o rastro orbital
+  simulation.trailPositions.length = 0; 
 
-  useEffect(() => {
-    resetSimulation(orbitRadius, sunMass, planetMass);
-    rafRef.current = requestAnimationFrame(animate);
+  
+  // 7. Redesenha para mostrar as posições resetadas
+  Render.world(render);
+};
 
-    return () => {
-      cancelAnimationFrame(rafRef.current);
+// Setup physics events
+export const setupPhysicsEvents = (simulation: SimulationObjects): void => {
+  const { engine, render, body01, body02, trailPositions } = simulation;
+
+  // Update physics in each tick
+  Events.on(engine, 'beforeUpdate', function () {
+    
+    // Calculate distance between bodies
+    const dx = body02.position.x - body01.position.x;
+    const dy = body02.position.y - body01.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate gravitational force magnitude
+    const forceMagnitude = (G * body01.mass * body02.mass) / (distance * distance);
+    
+    // Scale the force to be visible in simulation
+    const scaledForce = forceMagnitude * scaleFactor;
+
+    // Calculate force components
+    const force = {
+      x: (scaledForce * dx) / distance,
+      y: (scaledForce * dy) / distance,
     };
-  }, []);
 
-  const togglePause = () => {
-    stateRef.current.isPaused = !stateRef.current.isPaused;
+    // Apply forces to both bodies (equal and opposite)
+    Body.applyForce(body01, body01.position, {
+      x: force.x,
+      y: force.y,
+    });
 
-    if (!stateRef.current.isPaused) {
-      lastTimeRef.current = performance.now();
-      rafRef.current = requestAnimationFrame(animate);
+    Body.applyForce(body02, body02.position, {
+      x: -force.x,
+      y: -force.y,
+    });
+
+    // Add current position of body02 to trail
+    trailPositions.push({ x: body02.position.x, y: body02.position.y });
+
+    // Limit the number of trail points
+    if (trailPositions.length > maxTrailPoints) {
+      trailPositions.shift();
+    }
+  });
+
+  // Render trails
+  Events.on(render, 'afterRender', function () {
+    const context = render.context;
+    context.save();
+    context.scale(
+      render.options.width! / (render.bounds.max.x - render.bounds.min.x),
+      render.options.height! / (render.bounds.max.y - render.bounds.min.y)
+    );
+    context.translate(-render.bounds.min.x, -render.bounds.min.y);
+
+    // Draw orbit trail
+    context.beginPath();
+    context.strokeStyle = 'rgba(77, 166, 255, 0.8)'; // Brighter trail color
+    context.lineWidth = 2; // Thicker trail line
+
+    for (let i = 0; i < trailPositions.length; i++) {
+      const pos = trailPositions[i];
+      if (i === 0) {
+        context.moveTo(pos.x, pos.y);
+      } else {
+        context.lineTo(pos.x, pos.y);
+      }
     }
 
-    return stateRef.current.isPaused;
-  };
+    context.stroke();
+    
+    // Add glow effect to sun (body01)
+    const sunGlow = 30; // Glow radius
+    const sunGradient = context.createRadialGradient(
+      body01.position.x, body01.position.y, body01.circleRadius,
+      body01.position.x, body01.position.y, body01.circleRadius + sunGlow
+    );
+    
+    sunGradient.addColorStop(0, 'rgba(255, 166, 35, 0.3)');
+    sunGradient.addColorStop(1, 'rgba(255, 166, 35, 0)');
+    
+    context.beginPath();
+    context.fillStyle = sunGradient;
+    context.arc(body01.position.x, body01.position.y, body01.circleRadius + sunGlow, 0, Math.PI * 2);
+    context.fill();
+    
+    // Add glow effect to planet (body02)
+    const planetGlow = 15; // Glow radius
+    const planetGradient = context.createRadialGradient(
+      body02.position.x, body02.position.y, body02.circleRadius,
+      body02.position.x, body02.position.y, body02.circleRadius + planetGlow
+    );
+    
+    planetGradient.addColorStop(0, 'rgba(77, 166, 255, 0.3)');
+    planetGradient.addColorStop(1, 'rgba(77, 166, 255, 0)');
+    
+    context.beginPath();
+    context.fillStyle = planetGradient;
+    context.arc(body02.position.x, body02.position.y, body02.circleRadius + planetGlow, 0, Math.PI * 2);
+    context.fill();
+    
+    context.restore();
+  });
+};
 
-  const setTimeScale = (scale: number) => {
-    stateRef.current.timeScale = scale;
-  };
+export const handleZoomIn = (simulation: SimulationObjects): void => {
+  const zoomFactor = -0.1; // Negative for zoom in
+  
+  const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
+  const viewHeight = simulation.render.bounds.max.y - simulation.render.bounds.min.y;
 
-  return {
-    getState: () => ({ ...stateRef.current }),
-    resetSimulation,
-    togglePause,
-    setTimeScale,
-    updateSunMass,
-    updatePlanetMass,
-    updateOrbitRadius
-  };
-}
+  const newWidth = viewWidth * (1 + zoomFactor);
+  const newHeight = viewHeight * (1 + zoomFactor);
+
+  const centerX = (simulation.render.bounds.min.x + simulation.render.bounds.max.x) / 2;
+  const centerY = (simulation.render.bounds.min.y + simulation.render.bounds.max.y) / 2;
+
+  simulation.render.bounds.min.x = centerX - newWidth / 2;
+  simulation.render.bounds.max.x = centerX + newWidth / 2;
+  simulation.render.bounds.min.y = centerY - newHeight / 2;
+  simulation.render.bounds.max.y = centerY + newHeight / 2;
+
+  // Força o redesenho imediato
+  Render.lookAt(simulation.render, {
+    min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
+    max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
+  });
+  Render.world(simulation.render); // Adicione esta linha
+};
+
+export const handleZoomOut = (simulation: SimulationObjects): void => {
+  const zoomFactor = 0.1; // Positive for zoom out
+  
+  const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
+  const viewHeight = simulation.render.bounds.max.y - simulation.render.bounds.min.y;
+
+  const newWidth = viewWidth * (1 + zoomFactor);
+  const newHeight = viewHeight * (1 + zoomFactor);
+
+  const centerX = (simulation.render.bounds.min.x + simulation.render.bounds.max.x) / 2;
+  const centerY = (simulation.render.bounds.min.y + simulation.render.bounds.max.y) / 2;
+
+  simulation.render.bounds.min.x = centerX - newWidth / 2;
+  simulation.render.bounds.max.x = centerX + newWidth / 2;
+  simulation.render.bounds.min.y = centerY - newHeight / 2;
+  simulation.render.bounds.max.y = centerY + newHeight / 2;
+
+  // Força o redesenho imediato
+  Render.lookAt(simulation.render, {
+    min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
+    max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
+  });
+  Render.world(simulation.render); // Adicione esta linha
+};
+
+export const setupZoom = (container: HTMLElement, simulation: SimulationObjects): void => {
+  container.addEventListener("wheel", function (event) {
+    event.preventDefault();
+    
+    const zoomFactor = 0.1;
+    const delta = event.deltaY > 0 ? zoomFactor : -zoomFactor;
+
+    const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
+    const viewHeight = simulation.render.bounds.max.y - simulation.render.bounds.min.y;
+
+    const newWidth = viewWidth * (1 + delta);
+    const newHeight = viewHeight * (1 + delta);
+
+    const centerX = (simulation.render.bounds.min.x + simulation.render.bounds.max.x) / 2;
+    const centerY = (simulation.render.bounds.min.y + simulation.render.bounds.max.y) / 2;
+
+    simulation.render.bounds.min.x = centerX - newWidth / 2;
+    simulation.render.bounds.max.x = centerX + newWidth / 2;
+    simulation.render.bounds.min.y = centerY - newHeight / 2;
+    simulation.render.bounds.max.y = centerY + newHeight / 2;
+
+    // Força o redesenho imediato
+    Render.lookAt(simulation.render, {
+      min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
+      max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
+    });
+    Render.world(simulation.render); // Adicione esta linha
+  });
+};
+
+// Setup drag to move functionality
+export const setupDragToMove = (container: HTMLElement, simulation: SimulationObjects): void => {
+  container.addEventListener('canvas-drag', function(event: Event) {
+    const customEvent = event as CustomEvent;
+    const { dx, dy } = customEvent.detail;
+    
+    // Limpa completamente o canvas antes de mover
+    const context = simulation.render.context;
+    context.clearRect(0, 0, simulation.render.canvas.width, simulation.render.canvas.height);
+    
+    // Aplica o movimento
+    const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
+    const canvasWidth = container.clientWidth;
+    const scaleFactor = viewWidth / canvasWidth;
+    
+    simulation.render.bounds.min.x -= dx * scaleFactor;
+    simulation.render.bounds.max.x -= dx * scaleFactor;
+    simulation.render.bounds.min.y -= dy * scaleFactor;
+    simulation.render.bounds.max.y -= dy * scaleFactor;
+    
+    // Força um redesenho completo
+    Render.lookAt(simulation.render, {
+      min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
+      max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
+    });
+    
+    // Redesenha todos os elementos
+    Render.world(simulation.render);
+  });
+};
+
+// Clean up the simulation
+export const cleanupSimulation = (simulation: SimulationObjects): void => {
+  if (simulation) {
+    Events.off(simulation.engine, "engine");
+    Events.off(simulation.render, "render");
+    Render.stop(simulation.render);
+    Runner.stop(simulation.runner);
+    Engine.clear(simulation.engine);
+  }
+};
