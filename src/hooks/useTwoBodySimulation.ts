@@ -36,6 +36,7 @@ export const useTwoBodySimulation = (params: SimulationParams = {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
   const [simulationSpeed, setSimulationSpeed] = useState(params.simulationSpeed || 1);
+  const [currentZoom, setCurrentZoom] = useState(1);
 
   // Initialize simulation
   const initSimulation = useCallback(() => {
@@ -120,12 +121,14 @@ export const useTwoBodySimulation = (params: SimulationParams = {
   const zoomIn = useCallback(() => {
     if (!simulationRef.current) return;
     handleZoomIn(simulationRef.current);
+    setCurrentZoom(prev => prev + 0.2);
   }, []);
 
   // Zoom out function
   const zoomOut = useCallback(() => {
     if (!simulationRef.current) return;
     handleZoomOut(simulationRef.current);
+    setCurrentZoom(prev => Math.max(prev - 0.2, 0.5));
   }, []);
 
   // Clean up on unmount
@@ -142,6 +145,7 @@ export const useTwoBodySimulation = (params: SimulationParams = {
     isRunning,
     isInitialized,
     isPaused,
+    currentZoom,
     initSimulation,
     start,
     stop,

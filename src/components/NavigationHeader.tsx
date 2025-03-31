@@ -11,7 +11,7 @@ interface NavigationHeaderProps {
 
 const NavigationHeader: React.FC<NavigationHeaderProps> = ({ title, showBackButton = true }) => {
   return (
-    <div className="absolute top-0 left-0 right-0 h-16 z-20 flex items-center justify-between px-4 bg-gradient-to-b from-black/60 to-transparent backdrop-blur-sm">
+    <div className="fixed top-0 left-0 right-0 h-16 z-30 flex items-center justify-between px-4 bg-gradient-to-b from-black/60 to-transparent backdrop-blur-sm">
       <div className="flex items-center gap-2">
         {showBackButton && (
           <Link to="/">
@@ -26,8 +26,6 @@ const NavigationHeader: React.FC<NavigationHeaderProps> = ({ title, showBackButt
         )}
         <h1 className="text-lg md:text-xl font-medium text-white ml-2">{title}</h1>
       </div>
-      
-      
     </div>
   );
 };

@@ -1,25 +1,48 @@
+
 import React, { useRef, useState, useEffect } from "react";
 import { useTwoBodySimulation } from '@/hooks/useTwoBodySimulation';
-import TwoBodyCanvas from '@/components/TwoBodyCanvas';
 import NavigationHeader from '@/components/NavigationHeader';
 import SimulationGuide from "@/components/SimulationGuide";
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Pause, Play, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Pause, Play, RotateCcw, ZoomIn, ZoomOut, Settings, ChevronUp } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { G } from '@/utils/twoBodyPhysics';
 
 const TwoBodySimulation: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [zoomLevel, setZoomLevel] = useState<number>(0.8);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [cameraOffset, setCameraOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [startDragPosition, setStartDragPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [showControls, setShowControls] = useState<boolean>(true);
+  const [showControls, setShowControls] = useState<boolean>(false);
+  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+  const isMobile = useIsMobile();
 
   const [sunMass, setSunMass] = useState(900);
   const [planetMass, setPlanetMass] = useState(1);
   const [initialVelocity, setInitialVelocity] = useState(4);
   const [simSpeed, setSimSpeed] = useState(1);
   const [orbitalDistance, setOrbitalDistance] = useState(400);
+
+  // Calculate the gravitational force for display
+  const calculateForce = () => {
+    const distance = orbitalDistance;
+    const force = (G * sunMass * planetMass) / (distance * distance);
+    return force;
+  };
+  
+  // Format the force for display
+  const formattedForce = calculateForce().toExponential(2);
+
+  // Detect mobile devices and adjust zoom
+  useEffect(() => {
+    if (isMobile) {
+      setZoomLevel(0.5);
+      // Position more center/right as requested
+      setCameraOffset({ x: -50, y: 0 });
+    }
+  }, [isMobile]);
 
   const {
     containerRef: simulationContainerRef,
@@ -58,15 +81,98 @@ const TwoBodySimulation: React.FC = () => {
     }
   }, [sunMass, planetMass, initialVelocity, simSpeed, orbitalDistance, isInitialized, updateParameters]);
 
-  // Cálculos para o guide
-  const G = 6.67430e-11;
-  const calculatedForce = (G * sunMass * planetMass) / (orbitalDistance * orbitalDistance);
-  const formattedForce = calculatedForce.toExponential(4);
+  // Handle touch events for mobile panning and zooming
+  useEffect(() => {
+    if (!isMobile || !containerRef.current) return;
+    
+    let lastDistance = 0;
+    let isDragging = false;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastDistance = Math.sqrt(dx * dx + dy * dy);
+      }
+    };
+    
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1 && isDragging) {
+        const dx = e.touches[0].clientX - lastTouchX;
+        const dy = e.touches[0].clientY - lastTouchY;
+        
+        setCameraOffset(prev => ({
+          x: prev.x + dx,
+          y: prev.y + dy
+        }));
+        
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        
+        if (simulationContainerRef.current) {
+          const dragEvent = new CustomEvent('canvas-drag', {
+            detail: { dx, dy, isPaused }
+          });
+          simulationContainerRef.current.dispatchEvent(dragEvent);
+        }
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (lastDistance > 0) {
+          const delta = distance - lastDistance;
+          if (Math.abs(delta) > 1) {
+            const zoomChange = delta * 0.01;
+            setZoomLevel(prev => Math.max(0.1, Math.min(prev + zoomChange, 5)));
+            
+            // Apply zoom to the simulation
+            if (delta > 0) {
+              zoomIn();
+            } else {
+              zoomOut();
+            }
+          }
+        }
+        
+        lastDistance = distance;
+      }
+    };
+    
+    const handleTouchEnd = () => {
+      isDragging = false;
+      lastDistance = 0;
+    };
+    
+    const container = containerRef.current;
+    container.addEventListener('touchstart', handleTouchStart);
+    container.addEventListener('touchmove', handleTouchMove, { passive: true }); // Changed to passive: true to allow scrolling
+    container.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isMobile, simulationContainerRef, isPaused, zoomIn, zoomOut]);
 
   const handleSpeedChange = (values: number[]) => {
     const newSpeed = values[0];
     setSimSpeed(newSpeed);
     updateParameters({ simulationSpeed: newSpeed });
+  };
+
+  const toggleShowControls = () => {
+    if (isMobile && isGuideOpen) {
+      setIsGuideOpen(false);
+    }
+    setShowControls(!showControls);
   };
 
   const guideContent = (
@@ -127,7 +233,6 @@ const TwoBodySimulation: React.FC = () => {
     
     setStartDragPosition({ x: event.clientX, y: event.clientY });
     
-    // Dispara evento de arraste para o canvas
     if (simulationContainerRef.current) {
       const moveEvent = new CustomEvent('canvas-drag', {
         detail: { dx: deltaX, dy: deltaY, isPaused }
@@ -162,14 +267,13 @@ const TwoBodySimulation: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="simulation-container w-full h-screen relative overflow-hidden bg-black"
+      className="simulation-container w-full min-h-screen relative bg-black"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* Container da simulação - mantém a referência para o hook */}
       <div 
         ref={simulationContainerRef}
         className="absolute inset-0 w-full h-full"
@@ -180,10 +284,12 @@ const TwoBodySimulation: React.FC = () => {
       <SimulationGuide 
         title="Guia: Lei da Gravitação Universal"
         content={guideContent}
+        isParametersOpen={showControls}
+        setIsParametersOpen={setShowControls}
       />
       
-      {/* Zoom controls */}
-      <div className="absolute top-24 right-4 flex flex-col gap-2 z-10">
+      {/* Zoom controls - Right side - Fixed */}
+      <div className="fixed top-24 right-4 flex flex-col gap-2 z-10">
         <Button 
           variant="outline" 
           size="icon" 
@@ -202,134 +308,187 @@ const TwoBodySimulation: React.FC = () => {
         </Button>
       </div>
       
-      {/* Controles */}
-      <div 
-        className={`control-panel fixed right-4 bottom-4 p-4 rounded-lg z-10 w-80 transition-all duration-300 ease-in-out ${showControls ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-20'}`}
-        onMouseEnter={() => setShowControls(true)}
-        onMouseLeave={() => setShowControls(false)}
-      >
-        <div className="mb-6">
-          <h3 className="text-white text-lg font-semibold mb-2">Simulação de Dois Corpos</h3>
+      {/* Play/Reset buttons - Left side - Fixed for mobile only */}
+      {isMobile && (
+        <div className="fixed top-24 left-4 flex flex-col gap-2 z-10">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={reset}
+            className="bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={toggle}
+            className="bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm"
+          >
+            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          </Button>
+        </div>
+      )}
+      
+      {/* Mobile parameters button */}
+      {isMobile && !showControls && (
+        <div 
+          className="fixed bottom-4 right-4 z-20 flex transition-all duration-300"
+          onClick={toggleShowControls}
+        >
+          <Button 
+            className="flex items-center gap-2 text-white/80 bg-black/80 backdrop-blur-sm hover:bg-black/80"
+          >
+            <Settings size={18} />
+            <span>Parâmetros</span>
+            <ChevronUp size={18} />
+          </Button>
+        </div>
+      )}
+      
+      {/* Controls panel */}
+      {(showControls || !isMobile) && (
+        <div 
+          className={`control-panel ${
+            isMobile 
+              ? 'fixed inset-x-0 bottom-0 rounded-t-lg max-h-[60vh] overflow-auto z-30' 
+              : 'fixed right-4 bottom-4 rounded-lg w-80 z-30'
+          } p-4 transition-all duration-300 ease-in-out bg-black/80 backdrop-blur-md`}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-white text-lg font-semibold">Simulação de Dois Corpos</h3>
+            {isMobile && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-gray-300 hover:text-white p-1"
+                onClick={toggleShowControls}
+              >
+                <ChevronUp className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+          
           <p className="text-xs text-gray-300 mb-4">
             Ajuste os parâmetros da simulação
           </p>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex justify-between text-white/70 text-sm">
-              <label className="flex items-center">
-                <div className="w-3 h-3 rounded-full mr-2 bg-yellow-400"></div>
-                Massa do Sol
-              </label>
-              <span>{sunMass}</span>
-            </div>
-            <Slider 
-              value={[sunMass]} 
-              min={100}
-              max={2000}
-              step={10}
-              onValueChange={(values) => setSunMass(values[0])}
-            />
-          </div>
           
-          <div className="space-y-3">
-            <div className="flex justify-between text-white/70 text-sm">
-              <label className="flex items-center">
-                <div className="w-3 h-3 rounded-full mr-2 bg-blue-400"></div>
-                Massa do Planeta
-              </label>
-              <span>{planetMass}</span>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-white/70 text-sm">
+                <label className="flex items-center">
+                  <div className="w-3 h-3 rounded-full mr-2 bg-yellow-400"></div>
+                  Massa do Sol
+                </label>
+                <span>{sunMass}</span>
+              </div>
+              <Slider 
+                value={[sunMass]} 
+                min={100}
+                max={2000}
+                step={10}
+                onValueChange={(values) => setSunMass(values[0])}
+              />
             </div>
-            <Slider 
-              value={[planetMass]} 
-              min={1}
-              max={100}
-              step={1}
-              onValueChange={(values) => setPlanetMass(values[0])}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between text-white/70 text-sm">
-              <label>Velocidade Inicial</label>
-              <span>{initialVelocity}</span>
-            </div>
-            <Slider 
-              value={[initialVelocity]} 
-              min={1}
-              max={10}
-              step={0.1}
-              onValueChange={(values) => setInitialVelocity(values[0])}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between text-white/70 text-sm">
-              <label>Distância Orbital</label>
-              <span>{orbitalDistance}</span>
-            </div>
-            <Slider 
-              value={[orbitalDistance]} 
-              min={200}
-              max={800}
-              step={10}
-              onValueChange={(values) => setOrbitalDistance(values[0])}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between text-white/70 text-sm">
-              <label>Velocidade da Simulação</label>
-              <span>{simSpeed.toFixed(1)}x</span>
-            </div>
-            <Slider 
-              value={[simSpeed]} 
-              min={0.1}
-              max={5}
-              step={0.1}
-              onValueChange={handleSpeedChange}
-            />
-          </div>
-          
-          <div className="flex justify-between gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={reset}
-              className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
-            >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Reset
-            </Button>
             
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={toggle}
-              className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
-            >
-              {isPaused ? (
-                <>
-                  <Play className="h-4 w-4 mr-1" />
-                  Iniciar
-                </>
-              ) : (
-                <>
-                  <Pause className="h-4 w-4 mr-1" />
-                  Pausar
-                </>
-              )}
-            </Button>
+            <div className="space-y-2">
+              <div className="flex justify-between text-white/70 text-sm">
+                <label className="flex items-center">
+                  <div className="w-3 h-3 rounded-full mr-2 bg-blue-400"></div>
+                  Massa do Planeta
+                </label>
+                <span>{planetMass}</span>
+              </div>
+              <Slider 
+                value={[planetMass]} 
+                min={1}
+                max={100}
+                step={1}
+                onValueChange={(values) => setPlanetMass(values[0])}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-white/70 text-sm">
+                <label>Velocidade Inicial</label>
+                <span>{initialVelocity}</span>
+              </div>
+              <Slider 
+                value={[initialVelocity]} 
+                min={1}
+                max={10}
+                step={0.1}
+                onValueChange={(values) => setInitialVelocity(values[0])}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-white/70 text-sm">
+                <label>Distância Orbital</label>
+                <span>{orbitalDistance}</span>
+              </div>
+              <Slider 
+                value={[orbitalDistance]} 
+                min={200}
+                max={800}
+                step={10}
+                onValueChange={(values) => setOrbitalDistance(values[0])}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-white/70 text-sm">
+                <label>Velocidade da Simulação</label>
+                <span>{simSpeed.toFixed(1)}x</span>
+              </div>
+              <Slider 
+                value={[simSpeed]} 
+                min={0.1}
+                max={5}
+                step={0.1}
+                onValueChange={handleSpeedChange}
+              />
+            </div>
+            
+            <div className="flex justify-between gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={reset}
+                className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reset
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={toggle}
+                className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
+              >
+                {isPaused ? (
+                  <>
+                    <Play className="h-4 w-4 mr-1" />
+                    Iniciar
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-4 w-4 mr-1" />
+                    Pausar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          
+          <div className="mt-4 pt-3 border-t border-gray-800">
+            <p className="text-xs text-gray-400 italic">
+              Constante Gravitacional (G) fixa em 6.67408 × 10⁻¹¹ N.m²/kg²
+            </p>
           </div>
         </div>
-        
-        <div className="mt-6 pt-4 border-t border-gray-800">
-          <p className="text-xs text-gray-400 italic">
-            Constante Gravitacional (G) fixa em 6.67408 × 10⁻¹¹ N.m²/kg²
-          </p>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
