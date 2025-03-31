@@ -1,18 +1,22 @@
-
-import { Bodies, Body, Composite, Engine, Events, Render, Runner, IEventCollision } from "matter-js";
+import { Bodies, Body, Composite, Engine, Events, Render, Runner } from "matter-js";
 
 // Constants
 export const G = 6.67430e-11; // Universal gravitational constant
 export const scaleFactor = 1e9; // Scale factor to make forces visible in simulation
 export const maxTrailPoints = 150; // Maximum number of trail points
 
+// Types without module augmentation
+export interface MatterEventCollision {
+  pairs: any;
+}
+
 // Types
 export interface SimulationObjects {
-  engine: Matter.Engine;
-  render: Matter.Render;
-  runner: Matter.Runner;
-  body01: Matter.Body;
-  body02: Matter.Body;
+  engine: any; // Matter.Engine
+  render: any; // Matter.Render
+  runner: any; // Matter.Runner
+  body01: any; // Matter.Body
+  body02: any; // Matter.Body
   trailPositions: { x: number; y: number }[];
   initialParams: {
     sunMass: number;
@@ -252,7 +256,6 @@ export const stopSimulation = (simulation: SimulationObjects): void => {
 };
 
 // Reset the simulation
-// Adicione esta função ao seu twoBodyPhysics.ts
 export const resetSimulation = (simulation: SimulationObjects): void => {
   const { engine, render, body01, body02, trailPositions, initialParams } = simulation;
   
@@ -398,14 +401,16 @@ export const setupPhysicsEvents = (simulation: SimulationObjects): void => {
   });
 };
 
-export const handleZoomIn = (simulation: SimulationObjects): void => {
-  const zoomFactor = -0.1; // Negative for zoom in
+export const handleZoomIn = (simulation: SimulationObjects) => {
+  const zoomFactor = 0.2;
   
+  // Get the current view bounds
   const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
   const viewHeight = simulation.render.bounds.max.y - simulation.render.bounds.min.y;
 
-  const newWidth = viewWidth * (1 + zoomFactor);
-  const newHeight = viewHeight * (1 + zoomFactor);
+  // Calculate new bounds based on zoom
+  const newWidth = viewWidth * (1 - zoomFactor);
+  const newHeight = viewHeight * (1 - zoomFactor);
 
   const centerX = (simulation.render.bounds.min.x + simulation.render.bounds.max.x) / 2;
   const centerY = (simulation.render.bounds.min.y + simulation.render.bounds.max.y) / 2;
@@ -415,20 +420,24 @@ export const handleZoomIn = (simulation: SimulationObjects): void => {
   simulation.render.bounds.min.y = centerY - newHeight / 2;
   simulation.render.bounds.max.y = centerY + newHeight / 2;
 
-  // Força o redesenho imediato
+  // Update the render view to match the new bounds
   Render.lookAt(simulation.render, {
     min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
     max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
   });
-  Render.world(simulation.render); // Adicione esta linha
+  
+  // Force immediate redraw even if paused
+  Render.world(simulation.render);
 };
 
-export const handleZoomOut = (simulation: SimulationObjects): void => {
-  const zoomFactor = 0.1; // Positive for zoom out
+export const handleZoomOut = (simulation: SimulationObjects) => {
+  const zoomFactor = 0.2;
   
+  // Get the current view bounds
   const viewWidth = simulation.render.bounds.max.x - simulation.render.bounds.min.x;
   const viewHeight = simulation.render.bounds.max.y - simulation.render.bounds.min.y;
 
+  // Calculate new bounds based on zoom
   const newWidth = viewWidth * (1 + zoomFactor);
   const newHeight = viewHeight * (1 + zoomFactor);
 
@@ -440,12 +449,14 @@ export const handleZoomOut = (simulation: SimulationObjects): void => {
   simulation.render.bounds.min.y = centerY - newHeight / 2;
   simulation.render.bounds.max.y = centerY + newHeight / 2;
 
-  // Força o redesenho imediato
+  // Update the render view to match the new bounds
   Render.lookAt(simulation.render, {
     min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
     max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
   });
-  Render.world(simulation.render); // Adicione esta linha
+  
+  // Force immediate redraw even if paused
+  Render.world(simulation.render);
 };
 
 export const setupZoom = (container: HTMLElement, simulation: SimulationObjects): void => {
@@ -474,11 +485,10 @@ export const setupZoom = (container: HTMLElement, simulation: SimulationObjects)
       min: { x: simulation.render.bounds.min.x, y: simulation.render.bounds.min.y },
       max: { x: simulation.render.bounds.max.x, y: simulation.render.bounds.max.y }
     });
-    Render.world(simulation.render); // Adicione esta linha
+    Render.world(simulation.render);
   });
 };
 
-// Setup drag to move functionality
 export const setupDragToMove = (container: HTMLElement, simulation: SimulationObjects): void => {
   container.addEventListener('canvas-drag', function(event: Event) {
     const customEvent = event as CustomEvent;
@@ -509,7 +519,6 @@ export const setupDragToMove = (container: HTMLElement, simulation: SimulationOb
   });
 };
 
-// Clean up the simulation
 export const cleanupSimulation = (simulation: SimulationObjects): void => {
   if (simulation) {
     Events.off(simulation.engine, "engine");

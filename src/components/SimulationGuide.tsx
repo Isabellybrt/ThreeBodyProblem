@@ -1,17 +1,34 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Book, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Book, ChevronUp, X } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SimulationGuideProps {
   title: string;
   content: React.ReactNode;
+  isParametersOpen?: boolean;
+  setIsParametersOpen?: (open: boolean) => void;
 }
 
-const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => {
-  const [isMinimized, setIsMinimized] = useState(false);
+const SimulationGuide: React.FC<SimulationGuideProps> = ({ 
+  title, 
+  content,
+  isParametersOpen = false,
+  setIsParametersOpen = () => {}
+}) => {
+  const [isMinimized, setIsMinimized] = useState(true);
+  const isMobile = useIsMobile();
 
-  const toggleMinimize = () => setIsMinimized(!isMinimized);
+  const toggleMinimize = () => {
+    setIsMinimized(!isMinimized);
+    
+    // No mobile, fecha os parâmetros quando abre o guia
+    if (isMobile && isParametersOpen) {
+      setIsParametersOpen(false);
+    }
+  };
 
   // Função para impedir a propagação do evento de scroll
   const handleScroll = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -20,7 +37,7 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
 
   return (
     <div 
-      className={`fixed left-4 ${isMinimized ? 'bottom-4' : 'bottom-4 max-h-[calc(100vh-2rem)]'} z-20 transition-all duration-300 w-72`}
+      className={`fixed ${isMobile ? 'left-4 bottom-4' : 'left-4 bottom-4'} ${isMinimized ? '' : 'max-h-[60vh]'} z-20 transition-all duration-300 ${isMobile ? 'w-auto' : 'w-72'}`}
     >
       {isMinimized ? (
         <Button 
@@ -33,8 +50,8 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
         </Button>
       ) : (
         <Card 
-          className="bg-black/60 backdrop-blur-md border-white/10 text-white overflow-hidden shadow-lg"
-          onWheel={handleScroll} // Adiciona o manipulador de evento de scroll
+          className="bg-black/70 backdrop-blur-md border-white/10 text-white overflow-hidden shadow-lg"
+          onWheel={handleScroll}
         >
           <CardHeader className="p-3 flex flex-row items-center justify-between bg-black/40">
             <CardTitle className="text-md flex items-center gap-2">
@@ -48,14 +65,14 @@ const SimulationGuide: React.FC<SimulationGuideProps> = ({ title, content }) => 
                 className="h-7 w-7 rounded-full hover:bg-white/10"
                 onClick={toggleMinimize}
               >
-                <X size={16} /> {/* Ícone de fechar */}
+                <X size={16} />
               </Button>
             </div>
           </CardHeader>
           
           <div 
-            className="overflow-y-auto max-h-[60vh]"
-            onWheel={handleScroll} // Adiciona o manipulador de evento de scroll
+            className="overflow-y-auto max-h-[50vh]"
+            onWheel={handleScroll}
           >
             <CardContent className="p-3 text-sm">
               {content}

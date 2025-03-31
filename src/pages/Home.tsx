@@ -29,7 +29,7 @@ const Home = () => {
       <div className="max-w-5xl mx-auto text-center space-y-8 animate-fade-in z-10">
         <div className="space-y-4 mb-12">
           <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight">
-            Simulações de <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">Física</span>
+            Intera<span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">verso</span>
           </h1>
           <p className="text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto">
             Um laboratório virtual para explorar e compreender os princípios fundamentais de mecânica celeste e física newtoniana.
