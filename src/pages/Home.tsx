@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -28,8 +29,15 @@ const Home = () => {
 
       <div className="max-w-5xl mx-auto text-center space-y-8 animate-fade-in z-10">
         <div className="space-y-4 mb-12">
+          <div className="mb-4 flex justify-center">
+            <img 
+              src="/logo.png" 
+              alt="Logo Interaverso" 
+              className="h-32 w-auto mx-auto"
+            />
+          </div>
           <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight">
-            Intera<span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">verso</span>
+            Intera<span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">Verso</span>
           </h1>
           <p className="text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto">
             Um laboratório virtual para explorar e compreender os princípios fundamentais de mecânica celeste e física newtoniana.
@@ -40,11 +48,11 @@ const Home = () => {
           {/* Card 1 - Simulação de Translação e Rotação */}
           <Card className="bg-gradient-to-br from-gray-800 to-gray-900 backdrop-blur-md border border-gray-700 text-white hover:shadow-lg hover:shadow-yellow-500/20 hover:border-yellow-600 transition-all duration-300 transform hover:-translate-y-1">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-center text-white text-xl"> {/* Adicione justify-center aqui */}
+              <CardTitle className="flex items-center justify-center text-white text-xl">
                 <Rocket className="mr-2 text-[#fdca40]" />
                 Translação e Rotação
               </CardTitle>
-              <CardDescription className="text-gray-300 text-center"> {/* Adicione text-center aqui */}
+              <CardDescription className="text-gray-300 text-center">
                 Movimento combinado de corpos celestes
               </CardDescription>
             </CardHeader>
