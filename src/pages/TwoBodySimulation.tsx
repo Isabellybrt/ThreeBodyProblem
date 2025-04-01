@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from "react";
 import { useTwoBodySimulation } from '@/hooks/useTwoBodySimulation';
 import NavigationHeader from '@/components/NavigationHeader';
@@ -17,7 +18,7 @@ const TwoBodySimulation: React.FC = () => {
   const [showControls, setShowControls] = useState<boolean>(false);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const isMobile = useIsMobile();
-  
+
   const [sunMass, setSunMass] = useState(900);
   const [planetMass, setPlanetMass] = useState(1);
   const [initialVelocity, setInitialVelocity] = useState(4);
@@ -38,12 +39,8 @@ const TwoBodySimulation: React.FC = () => {
   useEffect(() => {
     if (isMobile) {
       setZoomLevel(0.5);
+      // Position more center/right as requested
       setCameraOffset({ x: -50, y: 0 });
-      // Start with controls minimized on mobile
-      setShowControls(false);
-    } else {
-      // For desktop, controls start open
-      setShowControls(true);
     }
   }, [isMobile]);
 
@@ -171,19 +168,6 @@ const TwoBodySimulation: React.FC = () => {
     updateParameters({ simulationSpeed: newSpeed });
   };
 
-  // Fix overlapping panels on mobile
-  useEffect(() => {
-    if (isMobile && showControls && isGuideOpen) {
-      setIsGuideOpen(false);
-    }
-  }, [showControls, isMobile, isGuideOpen]);
-
-  useEffect(() => {
-    if (isMobile && isGuideOpen && showControls) {
-      setShowControls(false);
-    }
-  }, [isGuideOpen, isMobile, showControls]);
-
   const toggleShowControls = () => {
     if (isMobile && isGuideOpen) {
       setIsGuideOpen(false);
@@ -274,22 +258,6 @@ const TwoBodySimulation: React.FC = () => {
     });
   };
 
-  // Modified zoom handlers for immediate effect
-  const handleZoomInClick = () => {
-    zoomIn();
-    setZoomLevel(prev => Math.min(prev + 0.2, 2.0));
-  };
-
-  const handleZoomOutClick = () => {
-    zoomOut();
-    setZoomLevel(prev => Math.max(prev - 0.2, 0.4));
-  };
-
-  // Direct toggle for play/pause to ensure it works on the first click
-  const handleToggleClick = () => {
-    toggle();
-  };
-
   return (
     <div
       ref={containerRef}
@@ -314,23 +282,23 @@ const TwoBodySimulation: React.FC = () => {
         setIsParametersOpen={setShowControls}
       />
       
-      {/* Zoom controls - Right side - Fixed for all devices */}
+      {/* Zoom controls - Right side - Fixed */}
       <div className="fixed top-24 right-4 flex flex-col gap-2 z-10">
         <Button 
           variant="outline" 
           size="icon" 
-          onClick={handleZoomInClick}
+          onClick={zoomIn}
           className="bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
         >
-          <ZoomIn className={isMobile ? "h-5 w-5" : "h-4 w-4"} />
+          <ZoomIn className="h-4 w-4" />
         </Button>
         <Button 
           variant="outline" 
           size="icon"
-          onClick={handleZoomOutClick}
+          onClick={zoomOut}
           className="bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
         >
-          <ZoomOut className={isMobile ? "h-5 w-5" : "h-4 w-4"} />
+          <ZoomOut className="h-4 w-4" />
         </Button>
       </div>
       
@@ -348,7 +316,7 @@ const TwoBodySimulation: React.FC = () => {
           <Button 
             variant="outline" 
             size="icon"
-            onClick={handleToggleClick}
+            onClick={toggle}
             className="bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm"
           >
             {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -359,14 +327,14 @@ const TwoBodySimulation: React.FC = () => {
       {/* Mobile parameters button */}
       {isMobile && !showControls && (
         <div 
-          className="fixed bottom-20 right-4 z-20 flex transition-all duration-300"
+          className="fixed bottom-4 right-4 z-20 flex transition-all duration-300"
           onClick={toggleShowControls}
         >
           <Button 
             className="flex items-center gap-2 text-white/80 bg-black/80 backdrop-blur-sm hover:bg-black/80"
           >
             <Settings size={18} />
-            <span className="flex-1 text-left text-sm truncate">Parâmetros</span>
+            <span>Parâmetros</span>
             <ChevronUp size={18} />
           </Button>
         </div>
@@ -490,7 +458,7 @@ const TwoBodySimulation: React.FC = () => {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={handleToggleClick}
+                onClick={toggle}
                 className="flex-1 bg-transparent border-gray-700 hover:bg-gray-800 text-gray-300 flex items-center justify-center"
               >
                 {isPaused ? (
