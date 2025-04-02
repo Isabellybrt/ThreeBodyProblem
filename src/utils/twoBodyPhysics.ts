@@ -59,7 +59,7 @@ export const initPhysicsSimulation = (
       width: container.clientWidth,
       height: container.clientHeight,
       wireframes: false,
-      background: '#000000',
+      background: 'rgba(5, 8, 22, 1)',
       pixelRatio: window.devicePixelRatio
     },
   });
